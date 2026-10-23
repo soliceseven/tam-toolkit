@@ -13,7 +13,8 @@ import sys
 from common import get_all_regions, write_csv
 
 
-def main():
+def main() -> None:
+    """Parse CLI arguments, inventory EC2 instances across all regions, and write a CSV report."""
     p = argparse.ArgumentParser(description="EC2 inventory across regions")
     p.add_argument("--profile", default=None)
     p.add_argument("--output", default="ec2_inventory.csv")

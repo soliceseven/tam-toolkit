@@ -12,7 +12,13 @@ import sys
 from datetime import date, timedelta
 
 
-def main():
+def main() -> None:
+    """Parse CLI arguments, pull daily Cost Explorer spend, and flag anomalous days.
+
+    Compares each day's spend against the trailing average of all prior days
+    in the window and prints any day whose spend is at least
+    ``--threshold`` times that average.
+    """
     p = argparse.ArgumentParser(description="Flag unusual AWS daily spend")
     p.add_argument("--profile", default=None)
     p.add_argument("--days", type=int, default=14)

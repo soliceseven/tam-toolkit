@@ -24,7 +24,12 @@ COST_CHECK_NAMES = {
 }
 
 
-def main():
+def main() -> None:
+    """Parse CLI arguments, evaluate Trusted Advisor cost checks, and write a CSV of findings.
+
+    Requires Business or Enterprise Support, since full Trusted Advisor
+    checks are not available on Basic/Developer support plans.
+    """
     p = argparse.ArgumentParser(description="Trusted Advisor cost optimization report")
     p.add_argument("--profile", default=None)
     p.add_argument("--output", default="ta_cost.csv")

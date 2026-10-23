@@ -15,6 +15,19 @@ from common import get_all_regions, write_csv
 
 
 def collect_alarms(session: boto3.Session, regions: list[str]) -> list[dict[str, str]]:
+    """Collect metric and composite CloudWatch alarms across the given regions.
+
+    Args:
+        session: An authenticated boto3 Session used to create a per-region
+            CloudWatch client.
+        regions: AWS region names to scan for alarms.
+
+    Returns:
+        One row per alarm, each with region, name, state, metric, namespace,
+        and a state reason truncated to 120 characters. A region that raises
+        an error is skipped and reported to stderr rather than aborting the
+        whole scan.
+    """
     rows: list[dict[str, str]] = []
     for region in regions:
         try:
@@ -44,7 +57,8 @@ def collect_alarms(session: boto3.Session, regions: list[str]) -> list[dict[str,
     return rows
 
 
-def main():
+def main() -> None:
+    """Parse CLI arguments, scan all regions for alarms, and write a CSV report."""
     p = argparse.ArgumentParser(description="CloudWatch alarm report across regions")
     p.add_argument("--profile", default=None, help="AWS CLI profile name")
     p.add_argument("--output", default="alarms.csv", help="CSV output path")

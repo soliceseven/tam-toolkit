@@ -12,7 +12,8 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 
-def main():
+def main() -> None:
+    """Parse CLI arguments and summarize recent AWS Support cases by severity and status."""
     p = argparse.ArgumentParser(description="Summarize recent AWS Support cases")
     p.add_argument("--profile", default=None)
     p.add_argument("--days", type=int, default=30, help="Lookback window in days")

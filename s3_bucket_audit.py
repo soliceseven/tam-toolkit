@@ -13,7 +13,12 @@ import sys
 from common import write_csv
 
 
-def main():
+def main() -> None:
+    """Parse CLI arguments, audit each S3 bucket's security posture, and write a CSV report.
+
+    Flags three findings per bucket: default encryption disabled, versioning
+    not enabled, and an incomplete public-access block.
+    """
     p = argparse.ArgumentParser(description="S3 bucket security audit")
     p.add_argument("--profile", default=None)
     p.add_argument("--output", default="s3_audit.csv")
