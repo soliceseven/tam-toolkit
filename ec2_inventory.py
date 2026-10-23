@@ -7,6 +7,8 @@ Usage:
                             [--region us-east-1,eu-west-1] [--format csv|json]
 """
 
+from __future__ import annotations
+
 import argparse
 import boto3
 import sys

@@ -43,3 +43,7 @@ Final parent validation: `python -m pytest -q` passed all 54 tests using mocked/
 This pass edited wording in `README.md`, this report, and comments/docstrings in production Python files only. It did not run code audits or tests.
 
 Parent verification of the Humanizer pass: Python ASTs match the previous commit after removing docstrings; executable statements are unchanged. `git diff --check` passed.
+
+## Python 3.9 CI follow-up
+
+GitHub CI found that importing ec2_inventory.py evaluated its `str | None` annotation on Python 3.9. Postponed annotation evaluation now preserves Python 3.9 compatibility. All 54 tests pass locally; the GitHub matrix verifies Python 3.9, 3.11, and 3.13.
