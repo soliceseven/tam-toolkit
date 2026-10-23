@@ -11,8 +11,18 @@ import boto3
 import sys
 from datetime import date, timedelta
 
+from botocore.exceptions import ProfileNotFound
 
-def main():
+from common import validate_session
+
+
+def main() -> None:
+    """Parse CLI arguments, pull daily Cost Explorer spend, and flag anomalous days.
+
+    Compares each day's spend against the trailing average of all prior days
+    in the window and prints any day whose spend is at least
+    ``--threshold`` times that average.
+    """
     p = argparse.ArgumentParser(description="Flag unusual AWS daily spend")
     p.add_argument("--profile", default=None)
     p.add_argument("--days", type=int, default=14)
@@ -20,7 +30,12 @@ def main():
                    help="Flag days spending >= threshold x trailing average")
     args = p.parse_args()
 
-    session = boto3.Session(profile_name=args.profile)
+    try:
+        session = boto3.Session(profile_name=args.profile)
+    except ProfileNotFound as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+    validate_session(session)
     ce = session.client("ce", region_name="us-east-1")
 
     end = date.today().isoformat()

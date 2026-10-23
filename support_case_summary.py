@@ -11,14 +11,24 @@ import boto3
 import sys
 from datetime import datetime, timedelta, timezone
 
+from botocore.exceptions import ProfileNotFound
 
-def main():
+from common import validate_session
+
+
+def main() -> None:
+    """Parse CLI arguments and summarize recent AWS Support cases by severity and status."""
     p = argparse.ArgumentParser(description="Summarize recent AWS Support cases")
     p.add_argument("--profile", default=None)
     p.add_argument("--days", type=int, default=30, help="Lookback window in days")
     args = p.parse_args()
 
-    session = boto3.Session(profile_name=args.profile)
+    try:
+        session = boto3.Session(profile_name=args.profile)
+    except ProfileNotFound as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+    validate_session(session)
     support = session.client("support", region_name="us-east-1")
 
     after = (datetime.now(timezone.utc) - timedelta(days=args.days)).isoformat()
