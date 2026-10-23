@@ -15,10 +15,14 @@ import support_case_summary
 def test_csv_formula_text_is_literal_and_json_is_unchanged(tmp_path, value):
     rows = [{"name": value, "count": -3}]
     common.write_rows(str(tmp_path / "out.csv"), rows, ["name", "count"])
-    with (tmp_path / "out.csv").open(newline="") as stream:
-        result = next(csv.DictReader(stream))
-    assert result["name"] == "'" + value
-    assert result["count"] == "-3"
+    if "\x00" in value:
+        # Python 3.9's CSV reader rejects NULs; inspect the serialized field.
+        assert (tmp_path / "out.csv").read_bytes() == b"name,count\r\n'\x00=1,-3\r\n"
+    else:
+        with (tmp_path / "out.csv").open(newline="") as stream:
+            result = next(csv.DictReader(stream))
+        assert result["name"] == "'" + value
+        assert result["count"] == "-3"
     common.write_rows(str(tmp_path / "out.json"), rows, [], "json")
     assert json.loads((tmp_path / "out.json").read_text()) == rows
     assert rows[0]["name"] == value
