@@ -19,8 +19,8 @@ from common import validate_session
 def main() -> None:
     """Parse CLI arguments, pull daily Cost Explorer spend, and flag anomalous days.
 
-    Compares each day's spend against the trailing average of all prior days
-    in the window and prints any day whose spend is at least
+    Compares the latest day's spend against the trailing average of all prior
+    days in the window and prints it when its spend is at least
     ``--threshold`` times that average.
     """
     p = argparse.ArgumentParser(description="Flag unusual AWS daily spend")
@@ -42,17 +42,25 @@ def main() -> None:
     start = (date.today() - timedelta(days=args.days)).isoformat()
 
     try:
-        resp = ce.get_cost_and_usage(
+        request = dict(
             TimePeriod={"Start": start, "End": end},
             Granularity="DAILY",
             Metrics=["UnblendedCost"],
         )
+        results = []
+        while True:
+            resp = ce.get_cost_and_usage(**request)
+            results.extend(resp.get("ResultsByTime", []))
+            token = resp.get("NextPageToken")
+            if not token:
+                break
+            request["NextPageToken"] = token
     except Exception as e:
         print(f"Cannot reach Cost Explorer: {e}", file=sys.stderr)
         sys.exit(1)
 
     daily = []
-    for r in resp["ResultsByTime"]:
+    for r in sorted(results, key=lambda row: row["TimePeriod"]["Start"]):
         amt = float(r["Total"]["UnblendedCost"]["Amount"])
         daily.append((r["TimePeriod"]["Start"], amt))
 
@@ -63,7 +71,7 @@ def main() -> None:
     baseline = sum(a for _, a in daily[:-1]) / (len(daily) - 1)
     print(f"Trailing {len(daily)-1}-day average: ${baseline:,.2f}/day\n")
 
-    flagged = [(d, a) for d, a in daily if baseline > 0 and a >= baseline * args.threshold]
+    flagged = [(d, a) for d, a in daily[-1:] if baseline > 0 and a >= baseline * args.threshold]
     if not flagged:
         print("No anomalies detected.")
         return

@@ -53,6 +53,15 @@ def validate_session(session: boto3.Session) -> None:
         sys.exit(1)
 
 
+def spreadsheet_safe(value: Any) -> Any:
+    """Treat formula-leading CSV text as literal spreadsheet content."""
+    if isinstance(value, str):
+        leading = value.lstrip("".join(chr(i) for i in range(33)))
+        if leading.startswith(("=", "+", "-", "@")) or value.startswith(("\t", "\r", "\n")):
+            return "'" + value
+    return value
+
+
 def write_rows(path: str, rows: list[dict[str, Any]], fieldnames: list[str], fmt: str = "csv") -> None:
     """Write rows to path as CSV or JSON.
 
@@ -70,7 +79,7 @@ def write_rows(path: str, rows: list[dict[str, Any]], fieldnames: list[str], fmt
         with open(path, "w", newline="") as f:
             w = csv.DictWriter(f, fieldnames=fieldnames)
             w.writeheader()
-            w.writerows(rows)
+            w.writerows({key: spreadsheet_safe(value) for key, value in row.items()} for row in rows)
 
 
 def default_output_path(base_name: str, fmt: str) -> str:
