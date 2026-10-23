@@ -9,8 +9,9 @@ Usage:
 
 import argparse
 import boto3
-import csv
 import sys
+
+from common import write_csv
 
 
 COST_CHECK_NAMES = {
@@ -39,7 +40,7 @@ def main():
         print("Note: full Trusted Advisor checks require Business or Enterprise Support.", file=sys.stderr)
         sys.exit(1)
 
-    cost_checks = [c for c in checks if c["name"] in COST_CHECK_NAMES or "cost" in c["category"]]
+    cost_checks = [c for c in checks if c["name"] in COST_CHECK_NAMES or "cost" in c["category"].lower()]
     print(f"Evaluating {len(cost_checks)} cost-related checks...")
 
     rows = []
@@ -52,6 +53,8 @@ def main():
             continue
         flagged = result.get("resourcesSummary", {}).get("resourcesFlagged", 0)
         for res in result.get("flaggedResources", []):
+            # Metadata fields are unlabeled and vary by check, so we take the largest
+            # dollar figure present as a best-effort savings estimate.
             savings = 0.0
             for meta in res.get("metadata", []):
                 cleaned = meta.replace("$", "").replace(",", "").strip()
@@ -70,10 +73,7 @@ def main():
             })
         print(f"  [{check['name']}] {flagged} flagged")
 
-    with open(args.output, "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=["check", "resource", "region", "estimated_monthly_savings"])
-        w.writeheader()
-        w.writerows(rows)
+    write_csv(args.output, rows, fieldnames=["check", "resource", "region", "estimated_monthly_savings"])
 
     print(f"\nWrote {args.output}: {len(rows)} findings, ~${total_savings:,.2f}/mo estimated savings")
 

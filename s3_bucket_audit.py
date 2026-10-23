@@ -8,8 +8,9 @@ Usage:
 
 import argparse
 import boto3
-import csv
 import sys
+
+from common import write_csv
 
 
 def main():
@@ -40,14 +41,17 @@ def main():
             s3.get_bucket_encryption(Bucket=name)
             row["encryption"] = "ENABLED"
         except s3.exceptions.ClientError as e:
-            if "ServerSideEncryptionConfigurationNotFound" in str(e):
+            code = e.response["Error"]["Code"]
+            if code == "ServerSideEncryptionConfigurationNotFound":
                 row["encryption"] = "DISABLED"
+            else:
+                print(f"  [{name}] encryption check failed: {code}", file=sys.stderr)
 
         try:
             v = s3.get_bucket_versioning(Bucket=name).get("Status", "Suspended")
             row["versioning"] = v
-        except Exception:
-            pass
+        except s3.exceptions.ClientError as e:
+            print(f"  [{name}] versioning check failed: {e.response['Error']['Code']}", file=sys.stderr)
 
         try:
             pab = s3.get_public_access_block(Bucket=name)["PublicAccessBlockConfiguration"]
@@ -68,10 +72,11 @@ def main():
 
         rows.append(row)
 
-    with open(args.output, "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=["bucket", "region", "created", "encryption", "versioning", "pab", "issues"])
-        w.writeheader()
-        w.writerows(sorted(rows, key=lambda r: (bool(r["issues"]), r["bucket"]), reverse=True))
+    write_csv(
+        args.output,
+        sorted(rows, key=lambda r: (bool(r["issues"]), r["bucket"]), reverse=True),
+        fieldnames=["bucket", "region", "created", "encryption", "versioning", "pab", "issues"],
+    )
 
     risky = sum(1 for r in rows if r["issues"])
     print(f"Wrote {args.output}: {len(rows)} buckets, {risky} with findings")

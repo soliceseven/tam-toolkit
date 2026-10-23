@@ -8,8 +8,9 @@ Usage:
 
 import argparse
 import boto3
-import csv
 import sys
+
+from common import get_all_regions, write_csv
 
 
 def main():
@@ -20,8 +21,7 @@ def main():
     args = p.parse_args()
 
     session = boto3.Session(profile_name=args.profile)
-    ec2_global = session.client("ec2", region_name="us-east-1")
-    regions = [r["RegionName"] for r in ec2_global.describe_regions()["Regions"]]
+    regions = get_all_regions(session)
 
     rows = []
     for region in regions:
@@ -48,10 +48,11 @@ def main():
         except Exception as e:
             print(f"  [{region}] skipped: {e}", file=sys.stderr)
 
-    with open(args.output, "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=["region", "instance_id", "state", "type", "az", "name", "owner", "launch_time"])
-        w.writeheader()
-        w.writerows(sorted(rows, key=lambda r: (r["region"], r["state"], r["instance_id"])))
+    write_csv(
+        args.output,
+        sorted(rows, key=lambda r: (r["region"], r["state"], r["instance_id"])),
+        fieldnames=["region", "instance_id", "state", "type", "az", "name", "owner", "launch_time"],
+    )
 
     running = sum(1 for r in rows if r["state"] == "running")
     print(f"Wrote {args.output}: {len(rows)} instances ({running} running)")

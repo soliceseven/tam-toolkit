@@ -22,6 +22,13 @@ aws configure  # or use IAM role
 
 Each script accepts `--profile` and `--output` flags. Run with `--help` for options.
 
+## Testing
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
 ## Why this exists
 
 As a TAM, you're the customer's operational conscience. These scripts turn hours of console-clicking into minutes of automated reporting — the kind of proactive work that prevents Sev-1s instead of reacting to them.

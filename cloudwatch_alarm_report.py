@@ -8,18 +8,14 @@ Usage:
 
 import argparse
 import boto3
-import csv
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
+
+from common import get_all_regions, write_csv
 
 
-def get_all_regions(session):
-    ec2 = session.client("ec2", region_name="us-east-1")
-    return [r["RegionName"] for r in ec2.describe_regions()["Regions"]]
-
-
-def collect_alarms(session, regions):
-    rows = []
+def collect_alarms(session: boto3.Session, regions: list[str]) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
     for region in regions:
         try:
             cw = session.client("cloudwatch", region_name=region)
@@ -62,12 +58,13 @@ def main():
     in_alarm = [r for r in rows if r["state"] == "ALARM"]
     print(f"Found {len(rows)} alarms, {len(in_alarm)} in ALARM state.")
 
-    with open(args.output, "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=["region", "name", "state", "metric", "namespace", "reason"])
-        w.writeheader()
-        w.writerows(sorted(rows, key=lambda r: (r["state"] != "ALARM", r["region"], r["name"])))
+    write_csv(
+        args.output,
+        sorted(rows, key=lambda r: (r["state"] != "ALARM", r["region"], r["name"])),
+        fieldnames=["region", "name", "state", "metric", "namespace", "reason"],
+    )
 
-    print(f"Wrote {args.output} at {datetime.utcnow().isoformat()}Z")
+    print(f"Wrote {args.output} at {datetime.now(timezone.utc).isoformat()}")
     if in_alarm:
         print("\nAlarms currently firing:")
         for r in in_alarm:
