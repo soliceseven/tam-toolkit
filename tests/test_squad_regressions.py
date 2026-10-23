@@ -16,8 +16,12 @@ def test_csv_formula_text_is_literal_and_json_is_unchanged(tmp_path, value):
     rows = [{"name": value, "count": -3}]
     common.write_rows(str(tmp_path / "out.csv"), rows, ["name", "count"])
     if "\x00" in value:
-        # Python 3.9's CSV reader rejects NULs; inspect the serialized field.
-        assert (tmp_path / "out.csv").read_bytes() == b"name,count\r\n'\x00=1,-3\r\n"
+        # Python 3.9 rejects NULs on read and quotes them on write; newer
+        # versions also allow the equivalent unquoted representation.
+        assert (tmp_path / "out.csv").read_bytes() in {
+            b"name,count\r\n'\x00=1,-3\r\n",
+            b"name,count\r\n\"'\x00=1\",-3\r\n",
+        }
     else:
         with (tmp_path / "out.csv").open(newline="") as stream:
             result = next(csv.DictReader(stream))
