@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Support Case Summary — recent AWS Support cases by severity and status.
+Support Case Summary — summarize recent AWS Support cases by severity and status.
 
 Usage:
     python support_case_summary.py [--profile NAME] [--days 30]

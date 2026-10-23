@@ -1,10 +1,10 @@
 # TAM Toolkit
 
-Practical Python/boto3 scripts that turn routine AWS account-health checks into one-command CSV reports, for AWS Technical Account Managers and anyone else running Enterprise Support-style reviews.
+The TAM Toolkit provides Python/boto3 scripts that turn routine AWS account-health checks into one-command CSV reports. It is for AWS Technical Account Managers and anyone else running Enterprise Support-style reviews.
 
 ## Overview
 
-Each script wraps a handful of boto3 calls (scanning all regions, pulling Cost Explorer or Trusted Advisor data, auditing S3 posture) into a single CLI command that prints a summary and writes a CSV you can drop into a review doc. There's no framework, no config file, and no shared state between scripts: pick the one you need and run it against a profile.
+Each script combines boto3 calls to scan regions, retrieve Cost Explorer or Trusted Advisor data, or audit S3 settings. Run a script from the command line to print a summary and write a CSV for a review document. The scripts need no framework or configuration file and share no state; choose one and run it with an AWS profile.
 
 ## Scripts
 
@@ -58,7 +58,7 @@ Open `ec2_inventory.csv` to see instance ID, region, type, tags, and launch time
 
 ### Common flags
 
-- `--profile NAME`: AWS CLI profile to use (all scripts; omit to use the default credential chain). An invalid profile or missing credentials fails fast with a clear message instead of a raw stack trace.
+- `--profile NAME`: AWS CLI profile to use (all scripts; omit to use the default credential chain). If the profile is invalid or credentials are missing, the script exits with a clear message instead of a raw stack trace.
 - `--output PATH`: output file path (`cloudwatch_alarm_report.py`, `ec2_inventory.py`, `s3_bucket_audit.py`, `trusted_advisor_cost.py`). Defaults to `<name>.csv` or `<name>.json` depending on `--format`.
 - `--format {csv,json}`: output format for the same four scripts (default `csv`).
 - `--region R1,R2`: comma-separated regions to scan (`cloudwatch_alarm_report.py`, `ec2_inventory.py`). Omit to scan every region enabled for the account; regions are scanned in parallel either way.
@@ -99,4 +99,4 @@ The test suite stubs every AWS call with `botocore.stub.Stubber`, so it runs wit
 
 ## Why this exists
 
-As a TAM, you're the customer's operational conscience. These scripts turn hours of console-clicking into minutes of automated reporting, the kind of proactive work that prevents Sev-1s instead of reacting to them.
+These scripts automate routine AWS account-health checks that would otherwise require console work and produce reports for customer reviews.

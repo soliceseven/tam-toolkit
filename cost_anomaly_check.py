@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Cost Anomaly Check — flag unusual daily spend via Cost Explorer.
+Cost Anomaly Check — flag unusual daily spend using Cost Explorer.
 
 Usage:
     python cost_anomaly_check.py [--profile NAME] [--days 14] [--threshold 1.5]
@@ -17,10 +17,10 @@ from common import validate_session
 
 
 def main() -> None:
-    """Parse CLI arguments, pull daily Cost Explorer spend, and flag anomalous days.
+    """Parse CLI arguments, retrieve daily Cost Explorer spend, and flag anomalies.
 
-    Compares the latest day's spend against the trailing average of all prior
-    days in the window and prints it when its spend is at least
+    Compare the latest day's spend with the average for all preceding days in
+    the window. Print the latest day when its spend is at least
     ``--threshold`` times that average.
     """
     p = argparse.ArgumentParser(description="Flag unusual AWS daily spend")

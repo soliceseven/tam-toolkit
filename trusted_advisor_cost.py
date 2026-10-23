@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Trusted Advisor Cost Optimization — surface savings opportunities.
+Trusted Advisor Cost Optimization — report cost-saving opportunities.
 
-Full Trusted Advisor checks require Business or Enterprise Support; on any
-other support plan this falls back to Cost Explorer's EC2 rightsizing
+Full Trusted Advisor checks require Business or Enterprise Support. On other
+support plans, the script uses Cost Explorer's EC2 rightsizing
 recommendations, which work on every support tier.
 
 Usage:
@@ -32,14 +32,14 @@ COST_CHECK_NAMES = {
 def _rightsizing_fallback(session: boto3.Session) -> list[dict[str, str]]:
     """Fetch EC2 rightsizing recommendations from Cost Explorer.
 
-    Used when Trusted Advisor's full check set isn't available (Basic or
-    Developer support). Cost Explorer's rightsizing recommendations only
-    cover EC2, unlike Trusted Advisor's broader check set, but they need no
+    Use this when the full Trusted Advisor check set is unavailable (Basic
+    or Developer support). Cost Explorer's rightsizing recommendations cover
+    EC2 only, unlike Trusted Advisor's broader check set, and require no
     special support tier.
 
     Returns:
-        One row per flagged instance, in the same shape as the Trusted
-        Advisor rows (check/resource/region/estimated_monthly_savings).
+        One row per flagged instance, shaped like a Trusted Advisor row
+        (check/resource/region/estimated_monthly_savings).
     """
     ce = session.client("ce", region_name="us-east-1")
     rows: list[dict[str, str]] = []
@@ -75,8 +75,8 @@ def _rightsizing_fallback(session: boto3.Session) -> list[dict[str, str]]:
 def main() -> None:
     """Parse CLI arguments, evaluate Trusted Advisor cost checks, and write a report.
 
-    Falls back to Cost Explorer rightsizing recommendations when Trusted
-    Advisor's full checks aren't available on the account's support plan.
+    Use Cost Explorer rightsizing recommendations when the account's support
+    plan does not include Trusted Advisor's full checks.
     """
     p = argparse.ArgumentParser(description="Trusted Advisor cost optimization report")
     p.add_argument("--profile", default=None)
@@ -120,8 +120,8 @@ def main() -> None:
             continue
         flagged = result.get("resourcesSummary", {}).get("resourcesFlagged", 0)
         for res in result.get("flaggedResources", []):
-            # Metadata fields are unlabeled and vary by check, so we take the largest
-            # dollar figure present as a best-effort savings estimate.
+            # Metadata fields have no labels and vary by check, so use the
+            # largest dollar amount as a best-effort savings estimate.
             savings = 0.0
             for meta in res.get("metadata", []):
                 cleaned = meta.replace("$", "").replace(",", "").strip()
