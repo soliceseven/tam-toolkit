@@ -8,14 +8,19 @@ import trusted_advisor_cost as script
 
 
 class FakeSession:
-    """Stand-in for boto3.Session returning a pre-built support client."""
+    """Stand-in for boto3.Session returning a pre-built support client, and optionally a ce client."""
 
-    def __init__(self, client):
-        self._client = client
+    def __init__(self, support_client, ce_client=None):
+        self._support_client = support_client
+        self._ce_client = ce_client
 
     def client(self, service_name, region_name=None):
-        assert service_name == "support"
-        return self._client
+        if service_name == "support":
+            return self._support_client
+        if service_name == "ce":
+            assert self._ce_client is not None, "test did not expect a Cost Explorer fallback call"
+            return self._ce_client
+        raise AssertionError(f"unexpected service: {service_name}")
 
 
 def _check(check_id, name, category):
@@ -43,6 +48,7 @@ def _check_result(flagged_resources, flagged_count=None):
 
 
 def _run_main(monkeypatch, client, extra_args=None):
+    monkeypatch.setattr(script, "validate_session", lambda session: None)
     monkeypatch.setattr(script.boto3, "Session", lambda profile_name=None: FakeSession(client))
     monkeypatch.setattr("sys.argv", ["prog", *(extra_args or [])])
     script.main()
@@ -71,6 +77,7 @@ class TestMain:
         stubber.activate()
         output = tmp_path / "ta_cost.csv"
 
+        monkeypatch.setattr(script, "validate_session", lambda session: None)
         monkeypatch.setattr(script.boto3, "Session", lambda profile_name=None: FakeSession(support))
         monkeypatch.setattr("sys.argv", ["prog", "--output", str(output)])
         script.main()
@@ -97,6 +104,7 @@ class TestMain:
         stubber.activate()
         output = tmp_path / "ta_cost.csv"
 
+        monkeypatch.setattr(script, "validate_session", lambda session: None)
         monkeypatch.setattr(script.boto3, "Session", lambda profile_name=None: FakeSession(support))
         monkeypatch.setattr("sys.argv", ["prog", "--output", str(output)])
         script.main()
@@ -120,6 +128,7 @@ class TestMain:
         stubber.activate()
         output = tmp_path / "ta_cost.csv"
 
+        monkeypatch.setattr(script, "validate_session", lambda session: None)
         monkeypatch.setattr(script.boto3, "Session", lambda profile_name=None: FakeSession(support))
         monkeypatch.setattr("sys.argv", ["prog", "--output", str(output)])
         script.main()
@@ -128,15 +137,67 @@ class TestMain:
         assert len(rows) == 2  # header + the one check that succeeded
         assert "Idle Load Balancers" in capsys.readouterr().err
 
-    def test_checks_api_failure_exits_nonzero(self, monkeypatch, capsys):
-        """An API failure listing checks prints an error to stderr and exits non-zero."""
+    def test_falls_back_to_cost_explorer_when_trusted_advisor_unavailable(self, tmp_path, monkeypatch, capsys):
+        """On Basic/Developer support, Trusted Advisor checks fail and Cost Explorer rightsizing is used instead."""
         support = boto3.client("support", region_name="us-east-1")
-        stubber = Stubber(support)
-        stubber.add_client_error("describe_trusted_advisor_checks", service_error_code="SubscriptionRequiredException")
-        stubber.activate()
+        support_stubber = Stubber(support)
+        support_stubber.add_client_error("describe_trusted_advisor_checks", service_error_code="SubscriptionRequiredException")
+        support_stubber.activate()
+
+        ce = boto3.client("ce", region_name="us-east-1")
+        ce_stubber = Stubber(ce)
+        ce_stubber.add_response("get_rightsizing_recommendation", {
+            "RightsizingRecommendations": [
+                {
+                    "CurrentInstance": {"ResourceId": "i-modify"},
+                    "RightsizingType": "Modify",
+                    "ModifyRecommendationDetail": {
+                        "TargetInstances": [
+                            {"EstimatedMonthlySavings": "12.34", "DefaultTargetInstance": True},
+                        ],
+                    },
+                },
+                {
+                    "CurrentInstance": {"ResourceId": "i-terminate"},
+                    "RightsizingType": "Terminate",
+                    "TerminateRecommendationDetail": {"EstimatedMonthlySavings": "56.78"},
+                },
+            ],
+        })
+        ce_stubber.activate()
+        output = tmp_path / "ta_cost.csv"
+
+        monkeypatch.setattr(script, "validate_session", lambda session: None)
+        monkeypatch.setattr(script.boto3, "Session", lambda profile_name=None: FakeSession(support, ce))
+        monkeypatch.setattr("sys.argv", ["prog", "--output", str(output)])
+        script.main()
+
+        rows = output.read_text().splitlines()
+        assert len(rows) == 3  # header + 2 rightsizing findings
+        assert "i-modify,,12.34" in rows[1]
+        assert "i-terminate,,56.78" in rows[2]
+        assert "Falling back to Cost Explorer" in capsys.readouterr().err
+
+    def test_exits_nonzero_when_both_trusted_advisor_and_fallback_fail(self, monkeypatch, capsys):
+        """If the Cost Explorer fallback also fails, main() reports both errors and exits non-zero."""
+        support = boto3.client("support", region_name="us-east-1")
+        support_stubber = Stubber(support)
+        support_stubber.add_client_error("describe_trusted_advisor_checks", service_error_code="SubscriptionRequiredException")
+        support_stubber.activate()
+
+        ce = boto3.client("ce", region_name="us-east-1")
+        ce_stubber = Stubber(ce)
+        ce_stubber.add_client_error("get_rightsizing_recommendation", service_error_code="DataUnavailableException")
+        ce_stubber.activate()
+
+        monkeypatch.setattr(script, "validate_session", lambda session: None)
+        monkeypatch.setattr(script.boto3, "Session", lambda profile_name=None: FakeSession(support, ce))
+        monkeypatch.setattr("sys.argv", ["prog"])
 
         with pytest.raises(SystemExit) as exc_info:
-            _run_main(monkeypatch, support)
+            script.main()
 
         assert exc_info.value.code == 1
-        assert "Cannot reach Trusted Advisor" in capsys.readouterr().err
+        err = capsys.readouterr().err
+        assert "Cannot reach Trusted Advisor" in err
+        assert "Cost Explorer fallback also failed" in err

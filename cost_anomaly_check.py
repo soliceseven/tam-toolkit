@@ -11,6 +11,10 @@ import boto3
 import sys
 from datetime import date, timedelta
 
+from botocore.exceptions import ProfileNotFound
+
+from common import validate_session
+
 
 def main() -> None:
     """Parse CLI arguments, pull daily Cost Explorer spend, and flag anomalous days.
@@ -26,7 +30,12 @@ def main() -> None:
                    help="Flag days spending >= threshold x trailing average")
     args = p.parse_args()
 
-    session = boto3.Session(profile_name=args.profile)
+    try:
+        session = boto3.Session(profile_name=args.profile)
+    except ProfileNotFound as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+    validate_session(session)
     ce = session.client("ce", region_name="us-east-1")
 
     end = date.today().isoformat()

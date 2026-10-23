@@ -29,6 +29,7 @@ def _case(case_id, severity="normal", status="opened", subject="", created="2024
 
 
 def _run_main(monkeypatch, client, extra_args=None):
+    monkeypatch.setattr(script, "validate_session", lambda session: None)
     monkeypatch.setattr(script.boto3, "Session", lambda profile_name=None: FakeSession(client))
     monkeypatch.setattr("sys.argv", ["prog", *(extra_args or [])])
     script.main()

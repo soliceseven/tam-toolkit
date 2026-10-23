@@ -1,5 +1,7 @@
 """Tests for cloudwatch_alarm_report module."""
 
+import json
+
 import boto3
 from botocore.stub import Stubber
 
@@ -102,7 +104,15 @@ class TestCollectAlarms:
 
 
 class TestMain:
-    """Tests for main() end to end, with boto3 and region discovery mocked out."""
+    """Tests for main() end to end, with boto3, region discovery, and credential checks mocked out."""
+
+    def _patch_common(self, monkeypatch, regions, clients_by_region):
+        monkeypatch.setattr(script, "validate_session", lambda session: None)
+        monkeypatch.setattr(script, "resolve_regions", lambda session, region_arg: regions)
+        monkeypatch.setattr(
+            script.boto3, "Session",
+            lambda profile_name=None: FakeSession(clients_by_region),
+        )
 
     def test_writes_csv_and_reports_firing_alarms(self, tmp_path, monkeypatch, capsys):
         """main() writes a CSV sorted with ALARM-state rows first and prints firing alarms."""
@@ -116,11 +126,7 @@ class TestMain:
         })
         output = tmp_path / "alarms.csv"
 
-        monkeypatch.setattr(script, "get_all_regions", lambda session: ["us-east-1"])
-        monkeypatch.setattr(
-            script.boto3, "Session",
-            lambda profile_name=None: FakeSession({"us-east-1": cw}),
-        )
+        self._patch_common(monkeypatch, ["us-east-1"], {"us-east-1": cw})
         monkeypatch.setattr("sys.argv", ["prog", "--output", str(output)])
 
         script.main()
@@ -131,4 +137,84 @@ class TestMain:
 
         out = capsys.readouterr().out
         assert "Found 2 alarms, 1 in ALARM state." in out
-        assert "[us-east-1] bad-alarm — too high" in out
+        assert "[us-east-1] bad-alarm - too high" in out
+
+    def test_format_json_writes_json_to_default_filename(self, tmp_path, monkeypatch):
+        """With --format json and no --output, main() writes alarms.json in the cwd."""
+        cw = _stubbed_cloudwatch({
+            "MetricAlarms": [{"AlarmName": "a", "StateValue": "OK", "MetricName": "M",
+                              "Namespace": "NS", "StateReason": ""}],
+        })
+        monkeypatch.chdir(tmp_path)
+        self._patch_common(monkeypatch, ["us-east-1"], {"us-east-1": cw})
+        monkeypatch.setattr("sys.argv", ["prog", "--format", "json"])
+
+        script.main()
+
+        data = json.loads((tmp_path / "alarms.json").read_text())
+        assert data == [{
+            "region": "us-east-1", "name": "a", "state": "OK",
+            "metric": "M", "namespace": "NS", "reason": "",
+        }]
+
+    def test_region_flag_scans_all_listed_regions_without_discovery(self, tmp_path, monkeypatch):
+        """--region with multiple regions bypasses describe_regions and scans every one of them."""
+        cw_east = _stubbed_cloudwatch({
+            "MetricAlarms": [{"AlarmName": "east-alarm", "StateValue": "OK", "StateReason": ""}],
+        })
+        cw_west = boto3.client("cloudwatch", region_name="eu-west-1")
+        west_stubber = Stubber(cw_west)
+        west_stubber.add_response(
+            "describe_alarms",
+            {"MetricAlarms": [{"AlarmName": "west-alarm", "StateValue": "ALARM", "StateReason": "spiked"}]},
+        )
+        west_stubber.activate()
+        output = tmp_path / "alarms.csv"
+        seen_regions = set()
+
+        class NoDiscoverySession:
+            def client(self, service_name, region_name=None):
+                assert service_name == "cloudwatch", "must not call ec2.describe_regions"
+                seen_regions.add(region_name)
+                return {"us-east-1": cw_east, "eu-west-1": cw_west}[region_name]
+
+        monkeypatch.setattr(script, "validate_session", lambda session: None)
+        monkeypatch.setattr(script.boto3, "Session", lambda profile_name=None: NoDiscoverySession())
+        monkeypatch.setattr(
+            "sys.argv",
+            ["prog", "--output", str(output), "--region", "us-east-1,eu-west-1"],
+        )
+
+        script.main()
+
+        assert seen_regions == {"us-east-1", "eu-west-1"}
+        rows = output.read_text().splitlines()
+        names = {line.split(",")[1] for line in rows[1:]}
+        assert names == {"east-alarm", "west-alarm"}
+
+    def test_default_discovery_scans_every_enabled_region(self, tmp_path, monkeypatch):
+        """With no --region, main() scans every region describe_regions reports, not just one."""
+        cw_east = _stubbed_cloudwatch({
+            "MetricAlarms": [{"AlarmName": "east-alarm", "StateValue": "OK", "StateReason": ""}],
+        })
+        cw_west = boto3.client("cloudwatch", region_name="ap-southeast-2")
+        sydney_stubber = Stubber(cw_west)
+        sydney_stubber.add_response(
+            "describe_alarms",
+            {"MetricAlarms": [{"AlarmName": "sydney-alarm", "StateValue": "OK", "StateReason": ""}]},
+        )
+        sydney_stubber.activate()
+        output = tmp_path / "alarms.csv"
+
+        self._patch_common(
+            monkeypatch,
+            ["us-east-1", "ap-southeast-2"],
+            {"us-east-1": cw_east, "ap-southeast-2": cw_west},
+        )
+        monkeypatch.setattr("sys.argv", ["prog", "--output", str(output)])
+
+        script.main()
+
+        rows = output.read_text().splitlines()
+        regions_seen = {line.split(",")[0] for line in rows[1:]}
+        assert regions_seen == {"us-east-1", "ap-southeast-2"}

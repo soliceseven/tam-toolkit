@@ -2,6 +2,7 @@
 
 import boto3
 import pytest
+from botocore.exceptions import ProfileNotFound
 from botocore.stub import Stubber
 
 import cost_anomaly_check as script
@@ -31,6 +32,7 @@ def _cost_response(amounts):
 
 
 def _run_main(monkeypatch, ce_client, extra_args=None):
+    monkeypatch.setattr(script, "validate_session", lambda session: None)
     monkeypatch.setattr(script.boto3, "Session", lambda profile_name=None: FakeSession(ce_client))
     monkeypatch.setattr("sys.argv", ["prog", *(extra_args or [])])
     script.main()
@@ -97,3 +99,17 @@ class TestMain:
 
         assert exc_info.value.code == 1
         assert "Cannot reach Cost Explorer" in capsys.readouterr().err
+
+    def test_invalid_profile_exits_cleanly_instead_of_raw_traceback(self, monkeypatch, capsys):
+        """A bad --profile raises ProfileNotFound at Session() construction, caught with a clean exit."""
+        def raise_profile_not_found(profile_name=None):
+            raise ProfileNotFound(profile="bogus")
+
+        monkeypatch.setattr(script.boto3, "Session", raise_profile_not_found)
+        monkeypatch.setattr("sys.argv", ["prog", "--profile", "bogus"])
+
+        with pytest.raises(SystemExit) as exc_info:
+            script.main()
+
+        assert exc_info.value.code == 1
+        assert "bogus" in capsys.readouterr().err
