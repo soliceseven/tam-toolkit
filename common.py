@@ -1,4 +1,4 @@
-"""Shared helpers for the TAM toolkit scripts."""
+"""Shared helpers used by the TAM Toolkit scripts."""
 
 from __future__ import annotations
 
@@ -12,23 +12,23 @@ from botocore.exceptions import ProfileNotFound
 
 
 def get_all_regions(session: boto3.Session) -> list[str]:
-    """Return the names of all AWS regions enabled for this account."""
+    """Return the names of every AWS region enabled for the account."""
     ec2 = session.client("ec2", region_name="us-east-1")
     return [r["RegionName"] for r in ec2.describe_regions()["Regions"]]
 
 
 def resolve_regions(session: boto3.Session, region_arg: str | None) -> list[str]:
-    """Return the regions to scan.
+    """Choose the regions to scan.
 
     Args:
-        session: An authenticated boto3 Session, used to discover all enabled
-            regions when ``region_arg`` is not given.
+        session: An authenticated boto3 Session. Use it to discover all
+            enabled regions when ``region_arg`` is not given.
         region_arg: A comma-separated ``--region`` value, or None to scan
             every enabled region.
 
     Returns:
-        The explicit region list from ``region_arg`` if provided, otherwise
-        every region enabled for this account.
+        The regions in ``region_arg`` if provided; otherwise, every region
+        enabled for this account.
     """
     if region_arg:
         return [r.strip() for r in region_arg.split(",") if r.strip()]
@@ -36,10 +36,10 @@ def resolve_regions(session: boto3.Session, region_arg: str | None) -> list[str]
 
 
 def validate_session(session: boto3.Session) -> None:
-    """Fail fast with a clear message if the session has no usable credentials.
+    """Exit with a clear message if the session has no usable credentials.
 
-    Without this, an invalid --profile or missing credentials would only
-    surface as a raw botocore stack trace from the first API call.
+    Otherwise, an invalid --profile or missing credentials would surface as
+    a raw botocore stack trace on the first API call.
     """
     try:
         if session.get_credentials() is None:
@@ -53,13 +53,22 @@ def validate_session(session: boto3.Session) -> None:
         sys.exit(1)
 
 
+def spreadsheet_safe(value: Any) -> Any:
+    """Prefix formula-leading CSV text so spreadsheets treat it as literal content."""
+    if isinstance(value, str):
+        leading = value.lstrip("".join(chr(i) for i in range(33)))
+        if leading.startswith(("=", "+", "-", "@")) or value.startswith(("\t", "\r", "\n")):
+            return "'" + value
+    return value
+
+
 def write_rows(path: str, rows: list[dict[str, Any]], fieldnames: list[str], fmt: str = "csv") -> None:
-    """Write rows to path as CSV or JSON.
+    """Write rows to ``path`` as CSV or JSON.
 
     Args:
         path: Output file path.
-        rows: The records to write, in the given column order for CSV.
-        fieldnames: Column order (CSV only; ignored for JSON).
+        rows: Records to write, in the given column order for CSV.
+        fieldnames: CSV column order; ignored for JSON.
         fmt: "csv" (default) or "json".
     """
     if fmt == "json":
@@ -70,17 +79,17 @@ def write_rows(path: str, rows: list[dict[str, Any]], fieldnames: list[str], fmt
         with open(path, "w", newline="") as f:
             w = csv.DictWriter(f, fieldnames=fieldnames)
             w.writeheader()
-            w.writerows(rows)
+            w.writerows({key: spreadsheet_safe(value) for key, value in row.items()} for row in rows)
 
 
 def default_output_path(base_name: str, fmt: str) -> str:
-    """Return the default output path for base_name under the given format.
+    """Build the default output path from ``base_name`` and ``fmt``.
 
     Args:
         base_name: File stem, e.g. "alarms".
         fmt: "csv" or "json".
 
     Returns:
-        "{base_name}.{fmt}".
+        The path ``"{base_name}.{fmt}"``.
     """
     return f"{base_name}.{fmt}"

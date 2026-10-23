@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Support Case Summary — recent AWS Support cases by severity and status.
+Support Case Summary — summarize recent AWS Support cases by severity and status.
 
 Usage:
     python support_case_summary.py [--profile NAME] [--days 30]
@@ -33,11 +33,19 @@ def main() -> None:
 
     after = (datetime.now(timezone.utc) - timedelta(days=args.days)).isoformat()
     try:
-        cases = support.describe_cases(
+        request = dict(
             includeResolvedCases=True,
             includeCommunications=False,
             afterTime=after,
-        )["cases"]
+        )
+        cases = []
+        while True:
+            response = support.describe_cases(**request)
+            cases.extend(response.get("cases", []))
+            token = response.get("nextToken")
+            if not token:
+                break
+            request["nextToken"] = token
     except Exception as e:
         print(f"Cannot reach AWS Support API: {e}", file=sys.stderr)
         sys.exit(1)

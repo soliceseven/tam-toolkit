@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-CloudWatch Alarm Report — pull all alarms across regions, flag ALARM state.
+CloudWatch Alarm Report — collect alarms across regions and flag ALARM states.
 
 Usage:
     python cloudwatch_alarm_report.py [--profile NAME] [--output alarms.csv]
@@ -22,8 +22,8 @@ from common import default_output_path, resolve_regions, validate_session, write
 def _collect_region_alarms(session: boto3.Session, region: str) -> list[dict[str, str]]:
     """Collect metric and composite CloudWatch alarms for a single region.
 
-    A failure in this region is reported to stderr and yields no rows,
-    rather than aborting the whole scan.
+    If this region fails, report the error to stderr and return no rows
+    without aborting the full scan.
     """
     rows: list[dict[str, str]] = []
     try:
@@ -54,21 +54,20 @@ def _collect_region_alarms(session: boto3.Session, region: str) -> list[dict[str
 
 
 def collect_alarms(session: boto3.Session, regions: list[str]) -> list[dict[str, str]]:
-    """Collect metric and composite CloudWatch alarms across the given regions.
+    """Collect metric and composite CloudWatch alarms in the given regions.
 
-    Regions are scanned concurrently, since each is an independent, I/O-bound
-    API call.
+    Scan regions concurrently because each API call is independent and
+    I/O-bound.
 
     Args:
-        session: An authenticated boto3 Session used to create a per-region
-            CloudWatch client.
+        session: An authenticated boto3 Session for creating a CloudWatch
+            client in each region.
         regions: AWS region names to scan for alarms.
 
     Returns:
-        One row per alarm, each with region, name, state, metric, namespace,
-        and a state reason truncated to 120 characters. A region that raises
-        an error is skipped and reported to stderr rather than aborting the
-        whole scan.
+        One row per alarm with its region, name, state, metric, namespace,
+        and state reason truncated to 120 characters. If a region raises an
+        error, skip it and report the error to stderr; continue the scan.
     """
     if not regions:
         return []
@@ -81,7 +80,7 @@ def collect_alarms(session: boto3.Session, regions: list[str]) -> list[dict[str,
 
 
 def main() -> None:
-    """Parse CLI arguments, scan all regions for alarms, and write a report."""
+    """Parse CLI arguments, scan regions for alarms, and write a report."""
     p = argparse.ArgumentParser(description="CloudWatch alarm report across regions")
     p.add_argument("--profile", default=None, help="AWS CLI profile name")
     p.add_argument("--output", default=None, help="Output path (default: alarms.csv/.json)")

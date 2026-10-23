@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-S3 Bucket Audit — encryption, versioning, and public-access posture.
+S3 Bucket Audit — check encryption, versioning, and public access.
 
 Usage:
     python s3_bucket_audit.py [--profile NAME] [--output s3_audit.csv] [--format csv|json]
@@ -16,13 +16,13 @@ from common import default_output_path, validate_session, write_rows
 
 
 def main() -> None:
-    """Parse CLI arguments, audit each S3 bucket's security posture, and write a report.
+    """Parse CLI arguments, check each S3 bucket's security settings, and write a report.
 
-    Flags three findings per bucket: default encryption disabled, versioning
-    not enabled, and public-access risk. The public-access finding fires if
-    either the public-access-block configuration isn't fully locked down, or
-    the authoritative bucket policy status (``get_bucket_policy_status``)
-    reports the bucket as actually public.
+    Report three findings per bucket: default encryption is disabled,
+    versioning is not enabled, or the bucket has public-access risk. Flag
+    public-access risk if the public-access-block configuration is not fully
+    locked down or the authoritative bucket policy status
+    (``get_bucket_policy_status``) reports that the bucket is public.
     """
     p = argparse.ArgumentParser(description="S3 bucket security audit")
     p.add_argument("--profile", default=None)

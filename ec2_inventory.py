@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """
-EC2 Inventory — instance list with tags, state, and type across all regions.
+EC2 Inventory — list instances, tags, state, and type across regions.
 
 Usage:
     python ec2_inventory.py [--profile NAME] [--output ec2_inventory.csv] [--state running]
                             [--region us-east-1,eu-west-1] [--format csv|json]
 """
+
+from __future__ import annotations
 
 import argparse
 import boto3
@@ -21,8 +23,8 @@ from common import default_output_path, resolve_regions, validate_session, write
 def _collect_region_instances(session: boto3.Session, state_filter: str | None, region: str) -> list[dict[str, str]]:
     """Collect EC2 instances for a single region, optionally filtered by state.
 
-    A failure in this region is reported to stderr and yields no rows,
-    rather than aborting the whole scan.
+    If this region fails, report the error to stderr and return no rows
+    without aborting the full scan.
     """
     rows: list[dict[str, str]] = []
     try:
@@ -51,7 +53,7 @@ def _collect_region_instances(session: boto3.Session, state_filter: str | None, 
 
 
 def main() -> None:
-    """Parse CLI arguments, inventory EC2 instances across all regions, and write a report."""
+    """Parse CLI arguments, inventory EC2 instances across regions, and write a report."""
     p = argparse.ArgumentParser(description="EC2 inventory across regions")
     p.add_argument("--profile", default=None)
     p.add_argument("--output", default=None, help="Output path (default: ec2_inventory.csv/.json)")
